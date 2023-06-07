@@ -1,0 +1,1 @@
+the notebook serves as a comprehensive guide for image classification tasks by covering key aspects such as data loading and preparation using TensorFlow's data utilities, model construction, training, evaluation and monitoring model using tensorboard.
