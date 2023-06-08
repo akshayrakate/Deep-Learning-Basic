@@ -1,0 +1,65 @@
+import pandas as pd
+import tensorflow as tf
+from sklearn.model_selection import train_test_split
+
+# Read the DataFrame from a CSV file
+df = pd.read_csv('data.csv')  # Replace 'data.csv' with the path to your CSV file
+
+# Create TensorFlow dataset
+def preprocess_image(image_path):
+    # Load and preprocess the image
+    image = tf.io.read_file(image_path)
+    image = tf.image.decode_jpeg(image, channels=3)  # Adjust channels based on your image format
+    image = tf.image.resize(image, (224, 224))  # Adjust the target image size as needed
+    image = tf.image.convert_image_dtype(image, tf.float32)  # Convert image to float32 in [0, 1] range
+    return image
+
+def preprocess_mask(mask_path):
+    # Load and preprocess the mask
+    mask = tf.io.read_file(mask_path)
+    mask = tf.image.decode_png(mask, channels=1)  # Adjust channels based on your mask format
+    mask = tf.image.resize(mask, (224, 224))  # Adjust the target mask size as needed
+    mask = tf.image.convert_image_dtype(mask, tf.float32)  # Convert mask to float32 in [0, 1] range
+    return mask
+
+def preprocess_data(image_path, mask_path):
+    # Preprocess image and mask and return (image, mask) tuple
+    image = preprocess_image(image_path)
+    mask = preprocess_mask(mask_path)
+    return image, mask
+
+image_paths = df['image_path'].values  # Replace 'image_path' with the column name containing image paths
+mask_paths = df['mask_path'].values  # Replace 'mask_path' with the column name containing mask paths
+
+# Perform train-test split
+train_paths, test_paths, train_masks, test_masks = train_test_split(
+    image_paths, mask_paths, test_size=0.2, random_state=42)  # Adjust test_size as desired
+
+# Create the train dataset
+train_dataset = tf.data.Dataset.from_tensor_slices((train_paths, train_masks))
+train_dataset = train_dataset.map(preprocess_data)
+
+# Create the test dataset
+test_dataset = tf.data.Dataset.from_tensor_slices((test_paths, test_masks))
+test_dataset = test_dataset.map(preprocess_data)
+
+# Define the model
+model = tf.keras.Sequential([
+    tf.keras.layers.Conv2D(32, (3, 3), activation='relu', input_shape=(224, 224, 3)),
+    tf.keras.layers.MaxPooling2D((2, 2)),
+    tf.keras.layers.Conv2D(64, (3, 3), activation='relu'),
+    tf.keras.layers.MaxPooling2D((2, 2)),
+    tf.keras.layers.Conv2D(64, (3, 3), activation='relu'),
+    tf.keras.layers.Conv2DTranspose(64, (3, 3), strides=(2, 2), padding='same', activation='relu'),
+    tf.keras.layers.Conv2DTranspose(32, (3, 3), strides=(2, 2), padding='same', activation='relu'),
+    tf.keras.layers.Conv2D(1, (1, 1), activation='sigmoid')
+])
+
+# Compile the model
+model.compile(optimizer='adam',
+              loss='binary_crossentropy',
+              metrics=['accuracy'])
+
+batch_size = 8
+# Train the model
+model.fit(train_dataset.batch(batch_size), epochs=10, validation_data=test_dataset.batch(batch_size))
